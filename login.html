@@ -1,0 +1,99 @@
+<!-- login.html -->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Login</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .glass-container {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            padding: 40px;
+            text-align: center;
+            color: white;
+            width: 300px;
+        }
+
+        .google-btn {
+            margin: 0 auto;
+            background: white;
+            color: #444;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .google-btn img {
+            height: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="glass-container">
+        <h2>Login with Google</h2>
+        <button class="google-btn" id="google-login">
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google Icon" />
+            Sign in with Google
+        </button>
+    </div>
+
+    <!-- Firebase Modular SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getAuth, signInWithPopup, GoogleAuthProvider } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-analytics.js";
+        // TODO: Add SDKs for Firebase products that you want to use
+        // https://firebase.google.com/docs/web/setup#available-libraries
+
+        // Your web app's Firebase configuration
+        // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+        const firebaseConfig = {
+            apiKey: "AIzaSyBGvP8ddVQS-jOGGtECkQdBxjMu5PUpBrk",
+            authDomain: "funchatbot-f4495.firebaseapp.com",
+            projectId: "funchatbot-f4495",
+            storageBucket: "funchatbot-f4495.firebasestorage.app",
+            messagingSenderId: "418415675190",
+            appId: "1:418415675190:web:bceea63083bd1935b9d597",
+            measurementId: "G-749VCEM37V"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const provider = new GoogleAuthProvider();
+
+        document.getElementById("google-login").addEventListener("click", () => {
+            signInWithPopup(auth, provider)
+                .then((result) => {
+                    window.location.href = "chat.html";
+                })
+                .catch((error) => {
+                    alert("Login failed: " + error.message);
+                });
+        });
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ChatBot Prototype</title>
+    <style>
+        /* Your existing CSS styles */
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1f1c2c, #928dab);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding-top: 60px;
+            transition: background 0.5s ease;
+        }
+
+        .theme-toggle {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #ffffff20;
+            border: none;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 20px;
+            cursor: pointer;
+            z-index: 10;
+        }
+
+        .profile-wrapper {
+            position: absolute;
+            top: 10px;
+            right: 120px;
+        }
+
+        .profile-btn {
+            background: #ffffff20;
+            border: none;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 20px;
+            cursor: pointer;
+        }
+
+        .profile-menu {
+            display: none;
+            position: absolute;
+            right: 0;
+            background: #ffffff10;
+            padding: 10px;
+            border-radius: 10px;
+            margin-top: 5px;
+            color: white;
+            z-index: 100;
+            backdrop-filter: blur(5px);
+        }
+
+
+        .chat-container {
+            width: 90%;
+            max-width: 500px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            padding: 20px;
+            color: white;
+            position: relative;
+        }
+
+        .chat-box {
+            height: 400px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            transition: all 0.3s ease;
+        }
+
+        .chat-message {
+            margin: 10px 0;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        .chat-message img {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+        }
+
+        .chat-message .text {
+            max-width: 70%;
+            padding: 10px;
+            border-radius: 10px;
+        }
+
+        .user {
+            flex-direction: row-reverse;
+            color: #72e0ff;
+        }
+
+        .user .text {
+            background: rgba(114, 224, 255, 0.2);
+        }
+
+        .bot .text {
+            background: rgba(255, 179, 236, 0.2);
+            color: #ffb3ec;
+        }
+
+        .input-group {
+            display: flex;
+        }
+
+        .input-group input {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 8px 0 0 8px;
+            font-size: 16px;
+        }
+
+        .input-group button {
+            padding: 10px 15px;
+            border: none;
+            background-color: #6a00f4;
+            color: white;
+            font-size: 16px;
+            border-radius: 0 8px 8px 0;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .chatbot{
+            width: 30px;
+            height: 30px;
+            border-radius: 30px;
+        }
+
+        .input-group button:hover {
+            background-color: #5200b3;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .dark-mode {
+            background: linear-gradient(135deg, #121212, #333);
+        }
+
+        .typing-indicator {
+            display: none;
+            align-items: center;
+            gap: 10px;
+            margin: 10px 0;
+            color: #ffb3ec;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        .typing-indicator .dots::after {
+            content: "";
+            animation: typingDots 1s infinite;
+        }
+
+        @keyframes typingDots {
+            0% {
+                content: "";
+            }
+
+            33% {
+                content: ".";
+            }
+
+            66% {
+                content: "..";
+            }
+
+            100% {
+                content: "...";
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <button class="theme-toggle" onclick="toggleTheme()">Toggle Theme</button>
+    <div style="position: absolute; top: 10px; left: 10px; color: white; font-size: 20px; font-weight: bold;">
+        FunChatbot
+    </div>
+
+    <div class="profile-wrapper">
+        <button class="profile-btn" onclick="toggleProfileMenu()">👤</button>
+        <div class="profile-menu" id="profileMenu">
+            <div id="userName">Not logged in</div>
+            <button onclick="handleAuthAction()" id="authAction">Login</button>
+        </div>
+    </div>
+
+    <div class="chat-container">
+        <div class="chat-box" id="chatBox"></div>
+        <div id="typingIndicator" class="typing-indicator">
+            <img class="chatbot" src='chatbot.png' alt='bot' />
+            <div class='text'>😄 Typing<span class="dots"></span></div>
+        </div>
+        <div class="input-group">
+            <input type="text" id="userInput" placeholder="Type a message..." />
+            <button onclick="sendMessage()">Send</button>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script>
+
+        // Toggle Theme
+        function toggleTheme() {
+            document.body.classList.toggle("dark-mode");
+
+        }
+        // Toggle Profile Menu
+        function toggleProfileMenu() {
+            const menu = document.getElementById("profileMenu");
+            menu.style.display = menu.style.display === "block" ? "none" : "block";
+        }
+    </script>
+
+    <script>
+        //const API_KEY = "8ba2c94539b1819450e85066fa53857e6b86e75062e52a06cbc377ef78ae4d36"; // <<< Replace with your OpenAI API key
+
+        async function sendMessage() {
+            const input = document.getElementById("userInput");
+            const chatBox = document.getElementById("chatBox");
+            const typingIndicator = document.getElementById("typingIndicator");
+            const userMessage = input.value.trim();
+            if (!userMessage) return;
+
+            chatBox.innerHTML += `
+        <div class='chat-message user'>
+            <img src='user.jpg' alt='user' />
+            <div class='text'>${userMessage}</div>
+        </div>`;
+            input.value = "";
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            typingIndicator.style.display = "flex";
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            // Call the Flask API that interacts with Together API
+            const response = await fetch("http://localhost:5000/api/chat", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    message: userMessage,
+                }),
+            });
+
+            const data = await response.json();
+            const botReply = data.response || "Something went wrong!";
+
+            setTimeout(() => {
+                typingIndicator.style.display = "none";
+                chatBox.innerHTML += `
+            <div class='chat-message bot'>
+                <img src=bot.jpg alt='bot' />
+                <div class='text'>${botReply}</div>
+            </div>`;
+                chatBox.scrollTop = chatBox.scrollHeight;
+            }, 1500);
+        }
+
+    </script>
+    <script type="module">
+
+        // Import the functions you need from the SDKs you need
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-app.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-analytics.js";
+        import { getAuth, signInWithPopup, GoogleAuthProvider } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        // TODO: Add SDKs for Firebase products that you want to use
+        // https://firebase.google.com/docs/web/setup#available-libraries
+
+        // Your web app's Firebase configuration
+        // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+        const firebaseConfig = {
+            apiKey: "AIzaSyBGvP8ddVQS-jOGGtECkQdBxjMu5PUpBrk",
+            authDomain: "funchatbot-f4495.firebaseapp.com",
+            projectId: "funchatbot-f4495",
+            storageBucket: "funchatbot-f4495.firebasestorage.app",
+            messagingSenderId: "418415675190",
+            appId: "1:418415675190:web:bceea63083bd1935b9d597",
+            measurementId: "G-749VCEM37V"
+        };
+        firebase.auth().onAuthStateChanged(user => {
+            if (!user) {
+                window.location.href = "login.html";
+            }
+        });
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const analytics = getAnalytics(app);
+        // Initialize Firebase
+        const auth = firebase.auth();
+
+        // Firebase Auth State Change Listener
+        auth.onAuthStateChanged(user => {
+            const userName = document.getElementById("userName");
+            const authButton = document.getElementById("authAction");
+            if (user) {
+                userName.textContent = user.displayName || "Logged in as " + user.email;
+                authButton.textContent = "Logout";
+            } else {
+                userName.textContent = "Not logged in";
+                authButton.textContent = "Login";
+            }
+        });
+
+
+        // Handle Auth (Login/Logout)
+        function handleAuthAction() {
+            const user = auth.currentUser;
+            if (user) {
+                // Logout if logged in
+                auth.signOut().then(() => {
+                    console.log("Logged out");
+                }).catch(console.error);
+            } else {
+                // Login with Google
+                const provider = new firebase.auth.GoogleAuthProvider();
+                auth.signInWithPopup(provider).catch(console.error);
+            }
+        }
+
+
+    </script>
+</body>
+
+</html>
