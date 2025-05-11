@@ -267,7 +267,7 @@
             chatBox.scrollTop = chatBox.scrollHeight;
 
             // Call the Flask API that interacts with Together API
-            const response = await fetch("http://localhost:5000/api/chat", {
+            const response = await fetch("https://funqchatbot.onrender.com", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
