@@ -26,7 +26,7 @@ def get_recent_messages(uid, limit=20):
 app = Flask(__name__)
 CORS(app)  # Allows frontend from any origin to talk to this API
 
-client = Together(api_key="TOGETHER_API_KEY")  # Use your real API key here
+client = Together(api_key.getenv("TOGETHER_API_KEY"))  # Use your real API key here
 
 @app.route('/api/chat', methods=['POST'])
 def chat():
