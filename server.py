@@ -19,7 +19,7 @@ def store_message(uid, sender, message):
         "message": message,
         "timestamp": datetime.utcnow()
     })
-def get_recent_messages(uid, limit=10):
+def get_recent_messages(uid, limit=20):
     chat_ref = db.collection("users").document(uid).collection("chats")
     docs = chat_ref.order_by("timestamp", direction=firestore.Query.DESCENDING).limit(limit).stream()
     return list(reversed([{**doc.to_dict()} for doc in docs]))
