@@ -11,6 +11,7 @@ from firebase_admin import credentials
 cred_dict = json.loads(os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON"))
 cred = credentials.Certificate(cred_dict)
 firebase_admin.initialize_app(cred)
+db = firestore.client()
 def store_message(uid, sender, message):
     chat_ref = db.collection("users").document(uid).collection("chats")
     chat_ref.add({
