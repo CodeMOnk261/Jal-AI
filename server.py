@@ -5,6 +5,7 @@ from together import Together
 from datetime import datetime
 import json
 import firebase_admin
+from firebase_admin import firestore
 from firebase_admin import credentials
 
 app = Flask(__name__)
@@ -21,9 +22,16 @@ def chat():
         return jsonify({"response": "Please enter a message."}), 400
 
     try:
-        messages = [
-            {"role": "user", "content": user_message}
-        ]
+        uid = data.get("uid")  # Pass UID from frontend
+        recent_chats = get_recent_messages(uid)
+
+        messages = []
+        for chat in recent_chats:
+            role = "user" if chat["sender"] == "user" else "assistant"
+            messages.append({"role": role, "content": chat["message"]})
+
+        messages.append({"role": "user", "content": user_message})  # Add current message
+
         response = client.chat.completions.create(
             model="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
             messages=messages,
@@ -31,6 +39,9 @@ def chat():
         )
 
         reply = response.choices[0].message.content
+        store_message(uid, "user", user_message)
+        store_message(uid, "bot", reply)
+
         return jsonify({"response": reply})
     
     except Exception as e:
