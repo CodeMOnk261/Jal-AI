@@ -2,6 +2,10 @@ import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from together import Together
+from datetime import datetime
+import json
+import firebase_admin
+from firebase_admin import credentials
 
 app = Flask(__name__)
 CORS(app)  # Allows frontend from any origin to talk to this API
@@ -36,3 +40,21 @@ if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
 
+
+
+def store_message(uid, sender, message):
+    chat_ref = db.collection("users").document(uid).collection("chats")
+    chat_ref.add({
+        "sender": sender,
+        "message": message,
+        "timestamp": datetime.utcnow()
+    })
+def get_recent_messages(uid, limit=10):
+    chat_ref = db.collection("users").document(uid).collection("chats")
+    docs = chat_ref.order_by("timestamp", direction=firestore.Query.DESCENDING).limit(limit).stream()
+    return list(reversed([{**doc.to_dict()} for doc in docs]))
+
+
+cred_dict = json.loads(os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON"))
+cred = credentials.Certificate(cred_dict)
+firebase_admin.initialize_app(cred)
