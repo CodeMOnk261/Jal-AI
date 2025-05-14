@@ -40,6 +40,20 @@ def should_trigger_search(message):
             return True
 
     return False
+def get_user_profile(uid):
+    doc = db.collection("users").document(uid).get()
+    return doc.to_dict() if doc.exists else {}
+
+def update_user_profile(uid, profile_data):
+    db.collection("users").document(uid).set(profile_data, merge=True)
+def update_profile_from_message(uid, message):
+    if "my name is" in message.lower():
+        name = message.split("my name is")[-1].strip().split(" ")[0]
+        update_user_profile(uid, {"name": name})
+    if "i like" in message.lower():
+        hobby = message.split("i like")[-1].strip().split(" ")[0]
+        update_user_profile(uid, {"hobby": hobby})
+
 
 app = Flask(__name__)
 CORS(app)  # Allows frontend from any origin to talk to this API
@@ -59,6 +73,14 @@ def chat():
         recent_chats = get_recent_messages(uid)
 
         messages = []
+        update_profile_from_message(uid, user_message)
+        profile = get_user_profile(uid)
+        
+        # Inject as a system prompt
+        if profile:
+            profile_intro = f"The user's name is {profile.get('name', 'unknown')} and their hobby is {profile.get('hobby', 'unknown')}."
+            messages.insert(0, {"role": "system", "content": profile_intro})
+
 
         if should_trigger_search(user_message):
             query = user_message.strip()
