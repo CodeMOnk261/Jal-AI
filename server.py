@@ -3,6 +3,8 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from together import Together
 from datetime import datetime
+from serpapi import GoogleSearch
+import re
 import json
 import firebase_admin
 from firebase_admin import firestore
@@ -23,6 +25,22 @@ def get_recent_messages(uid, limit=20):
     chat_ref = db.collection("users").document(uid).collection("chats")
     docs = chat_ref.order_by("timestamp", direction=firestore.Query.DESCENDING).limit(limit).stream()
     return list(reversed([{**doc.to_dict()} for doc in docs]))
+
+def should_trigger_search(message):
+    # Define a list of regex patterns for common queries
+    patterns = [
+        r"\b(what|who|where|how|define|tell me about|explain)\b.*",  # Matches "What is...", "Who is...", etc.
+        r".*\b(news|latest|update|today|current)\b.*",  # Matches messages asking for current or recent info
+        r"\b(how to|tutorial|guide)\b.*"  # Matches how-to requests
+    ]
+    
+    # Check if any pattern matches the message
+    for pattern in patterns:
+        if re.match(pattern, message, re.IGNORECASE):  # re.IGNORECASE makes the search case-insensitive
+            return True
+
+    return False
+
 app = Flask(__name__)
 CORS(app)  # Allows frontend from any origin to talk to this API
 
@@ -41,6 +59,15 @@ def chat():
         recent_chats = get_recent_messages(uid)
 
         messages = []
+
+        if should_trigger_search(user_message):
+            query = user_message[7:].strip()
+            result_snippet = search_serpapi_duckduckgo(query)
+            messages.append({
+                "role": "system",
+                "content": f"The user searched for '{query}'. Use these top links to answer:\n{result_snippet}"
+            })
+
         for chat in recent_chats:
             role = "user" if chat["sender"] == "user" else "assistant"
             messages.append({"role": role, "content": chat["message"]})
@@ -61,6 +88,24 @@ def chat():
     
     except Exception as e:
         return jsonify({"response": f"Error: {str(e)}"}), 500
+
+def search_serpapi_duckduckgo(query):
+    params = {
+        "engine": "duckduckgo",
+        "q": query,
+        "kl": "us-en",
+        "api_key": os.getenv("SERPAPI_KEY")  # Store securely in .env or config
+    }
+    search = GoogleSearch(params)
+    results = search.get_dict()
+
+    if "organic_results" in results and results["organic_results"]:
+        top_results = results["organic_results"][:3]
+        return "\n".join(f"- {res.get('title')}: {res.get('link')}" for res in top_results)
+    else:
+        return "No relevant answer found."
+
+
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
