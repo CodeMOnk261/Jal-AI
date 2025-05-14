@@ -66,10 +66,8 @@ def chat():
             # Store the snippet as a bot/system message so it appears in chat
             store_message(uid, "bot", f"[Search Info] {result_snippet}")
 
-            messages.append({
-                "role": "system",
-                "content": f"The user searched for '{query}'. Use these top links to answer:\n{result_snippet}"
-            })
+            messages.append({"role": "system", "content": f"Use the following info to answer: {result_snippet}"})
+
 
         for chat in recent_chats:
             role = "user" if chat["sender"] == "user" else "assistant"
