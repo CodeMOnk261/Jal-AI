@@ -63,6 +63,9 @@ def chat():
         if should_trigger_search(user_message):
             query = user_message[7:].strip()
             result_snippet = search_serpapi_duckduckgo(query)
+            # Store the snippet as a bot/system message so it appears in chat
+            store_message(uid, "bot", f"[Search Info] {result_snippet}")
+
             messages.append({
                 "role": "system",
                 "content": f"The user searched for '{query}'. Use these top links to answer:\n{result_snippet}"
