@@ -3,11 +3,6 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from datetime import datetime, timedelta
 import string
-import nltk
-from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
-nltk.download("punkt", download_dir="/opt/render/nltk_data")
-nltk.download("stopwords", download_dir="/opt/render/nltk_data")
 
 from together import Together
 from datetime import datetime
@@ -82,18 +77,6 @@ def store_recent_query(uid, query):
         "query": query.lower().strip(),
         "timestamp": datetime.utcnow()
     })
-def normalize_query(query):
-    # Convert to lowercase
-    query = query.lower()
-    
-    # Tokenize and remove punctuation
-    words = word_tokenize(query.translate(str.maketrans("", "", string.punctuation)))
-    
-    # Remove stopwords
-    stop_words = set(stopwords.words("english"))
-    filtered = [w for w in words if w not in stop_words]
-    
-    return " ".join(filtered)
 
 def is_duplicate_query(uid, query, time_window_minutes=10):
     query_ref = db.collection("users").document(uid).collection("recent_queries")
@@ -143,12 +126,11 @@ def chat():
             messages.append({"role": role, "content": chat["message"]})
 
         messages.append({"role": "user", "content": user_message})# Add current message
-        normalized_query = normalize_query(user_message)
 
 # Compare against past normalized queries stored in Firestore, like:
 # {"normalized": "president usa", "original": "who is president of USA", "timestamp": ...}
 
-        if should_trigger_search(normalized_query):
+        if should_trigger_search(user_message):
             query = user_message.strip()
         
             if not is_duplicate_query(uid, query):
