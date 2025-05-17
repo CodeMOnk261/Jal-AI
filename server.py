@@ -185,8 +185,7 @@ def chat():
 
         reply = response.choices[0].message.content
         store_message(uid, "user", user_message)
-        toned_response = apply_tone(response, user_message)
-
+        toned_response = apply_tone(reply, user_message)
     
         store_message(uid, "bot", reply)
 
