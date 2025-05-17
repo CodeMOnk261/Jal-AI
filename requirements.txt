@@ -4,3 +4,5 @@ together
 firebase_admin
 serpapi
 google-search-results
+python-dotenv
+nltk
