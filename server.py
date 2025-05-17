@@ -12,14 +12,8 @@ import json
 import firebase_admin
 from firebase_admin import firestore
 from firebase_admin import credentials
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
-from transformers import pipeline
+from emotion_utils import apply_tone
 
-model_name = "nateraw/bert-base-uncased-emotion"
-emotion_classifier = pipeline("text-classification", model=model_name, tokenizer=model_name)
-def detect_emotion(text):
-    result = emotion_classifier(text)[0]
-    return result['label'], result['score']
     
 cred_dict = json.loads(os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON"))
 cred = credentials.Certificate(cred_dict)
@@ -96,30 +90,6 @@ def is_duplicate_query(uid, query, time_window_minutes=10):
         if doc.to_dict().get("query") == normalized_query:
             return True
     return False
-def adjust_tone(message, emotion):
-    if emotion == "anger":
-        return "I'm here to help—let’s solve this calmly. " + message
-    elif emotion == "sadness":
-        return "I'm really sorry you're feeling this way. You're not alone. " + message
-    elif emotion == "joy":
-        return "That's wonderful to hear! 😊 " + message
-    elif emotion == "surprise":
-        return "Wow, that's interesting! 😲 " + message
-    elif emotion == "fear":
-        return "It's okay to feel that way. I'm here with you. " + message
-    elif emotion == "love":
-        return "That's really sweet! 💖 " + message
-    elif emotion == "trust":
-        return "I appreciate your trust. Let's keep going strong. " + message
-    elif emotion == "anticipation":
-        return "Sounds like you're looking forward to something! " + message
-    elif emotion == "disgust":
-        return "I'm sorry that bothered you. Let's work through it together. " + message
-    elif emotion == "neutral":
-        return message  # No change
-    else:
-        return "Thanks for sharing that. " + message
-
 
 
 
@@ -181,9 +151,12 @@ def chat():
 
         reply = response.choices[0].message.content
         store_message(uid, "user", user_message)
+        toned_response = apply_tone(response, user_message)
+
+    
         store_message(uid, "bot", reply)
 
-        return jsonify({"response": reply})
+        return jsonify({'response': toned_response})
     
     except Exception as e:
         return jsonify({"response": f"Error: {str(e)}"}), 500
