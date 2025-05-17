@@ -6,8 +6,9 @@ import string
 import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
-nltk.download('punkt')
-nltk.download('stopwords')
+nltk.download("punkt", download_dir="/opt/render/nltk_data")
+nltk.download("stopwords", download_dir="/opt/render/nltk_data")
+
 from together import Together
 from datetime import datetime
 from serpapi import GoogleSearch
