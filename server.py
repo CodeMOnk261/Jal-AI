@@ -82,13 +82,7 @@ def chat():
             messages.insert(0, {"role": "system", "content": profile_intro})
 
 
-        if should_trigger_search(user_message):
-            query = user_message.strip()
-            result_snippet = search_serpapi_duckduckgo(query)
-            # Store the snippet as a bot/system message so it appears in chat
-            store_message(uid, "bot", f"[Search Info] {result_snippet}")
-
-            messages.append({"role": "system", "content": f"Use the following info to answer: {result_snippet}"})
+       
 
 
         for chat in recent_chats:
@@ -96,6 +90,20 @@ def chat():
             messages.append({"role": role, "content": chat["message"]})
 
         messages.append({"role": "user", "content": user_message})  # Add current message
+        if should_trigger_search(user_message):
+            query = user_message.strip()
+            result_snippet = search_serpapi_duckduckgo(query)
+            # Store the snippet as a bot/system message so it appears in chat
+            store_message(uid, "bot", f"[Search Info] {result_snippet}")
+
+            messages.append({
+            "role": "system",
+            "content": (
+                f"You must use the following updated real-time search result to answer the next question. "
+                f"Ignore any outdated or internal knowledge. The current answer is:\n\n{result_snippet}"
+                )
+            })
+
 
         response = client.chat.completions.create(
             model="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
