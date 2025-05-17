@@ -88,6 +88,31 @@ def is_duplicate_query(uid, query, time_window_minutes=10):
         if doc.to_dict().get("query") == normalized_query:
             return True
     return False
+def adjust_tone(message, emotion):
+    if emotion == "anger":
+        return "I'm here to help—let’s solve this calmly. " + message
+    elif emotion == "sadness":
+        return "I'm really sorry you're feeling this way. You're not alone. " + message
+    elif emotion == "joy":
+        return "That's wonderful to hear! 😊 " + message
+    elif emotion == "surprise":
+        return "Wow, that's interesting! 😲 " + message
+    elif emotion == "fear":
+        return "It's okay to feel that way. I'm here with you. " + message
+    elif emotion == "love":
+        return "That's really sweet! 💖 " + message
+    elif emotion == "trust":
+        return "I appreciate your trust. Let's keep going strong. " + message
+    elif emotion == "anticipation":
+        return "Sounds like you're looking forward to something! " + message
+    elif emotion == "disgust":
+        return "I'm sorry that bothered you. Let's work through it together. " + message
+    elif emotion == "neutral":
+        return message  # No change
+    else:
+        return "Thanks for sharing that. " + message
+
+
 
 
 app = Flask(__name__)
@@ -120,7 +145,7 @@ def chat():
 
        
 
-
+        
         for chat in recent_chats:
             role = "user" if chat["sender"] == "user" else "assistant"
             messages.append({"role": role, "content": chat["message"]})
@@ -139,7 +164,7 @@ def chat():
                 store_message(uid, "bot", f"[Search Info] {result_snippet}")
                 messages.append({"role": "system", "content": f"Use the following info to answer: {result_snippet}"})
 
-
+        user_emotion, confidence = detect_emotion(user_message)
         response = client.chat.completions.create(
             model="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
             messages=messages,
