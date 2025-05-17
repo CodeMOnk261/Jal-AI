@@ -53,7 +53,21 @@ def update_profile_from_message(uid, message):
     if "i like" in message.lower():
         hobby = message.split("i like")[-1].strip().split(" ")[0]
         update_user_profile(uid, {"hobby": hobby})
+def search_serpapi_duckduckgo(query):
+    params = {
+        "engine": "duckduckgo",
+        "q": query,
+        "kl": "us-en",
+        "api_key": os.getenv("SERPAPI_KEY")  # Store securely in .env or config
+    }
+    search = GoogleSearch(params)
+    results = search.get_dict()
 
+    if "organic_results" in results and results["organic_results"]:
+        top_results = results["organic_results"][:3]
+        return "\n".join(f"- {res.get('title')}: {res.get('link')}" for res in top_results)
+    else:
+        return "No relevant answer found."
 
 app = Flask(__name__)
 CORS(app)  # Allows frontend from any origin to talk to this API
@@ -79,7 +93,8 @@ def chat():
         # Inject as a system prompt
         if profile:
             profile_intro = f"The user's name is {profile.get('name', 'unknown')} and their hobby is {profile.get('hobby', 'unknown')}."
-            messages.insert(0, {"role": "system", "content": profile_intro})
+            messages.insert(1, {"role": "system", "content": profile_intro})
+
 
 
        
@@ -97,11 +112,11 @@ def chat():
             store_message(uid, "bot", f"[Search Info] {result_snippet}")
 
             messages.append({
-            "role": "system",
-            "content": (
-                f"You must use the following updated real-time search result to answer the next question. "
-                f"Ignore any outdated or internal knowledge. The current answer is:\n\n{result_snippet}"
-                )
+                "role": "system",
+                "content": (
+                    f"You must use the following updated real-time search result to answer the next question. "
+                    f"Ignore any outdated or internal knowledge. The current answer is:\n\n{result_snippet}"
+                    )
             })
 
 
@@ -120,21 +135,7 @@ def chat():
     except Exception as e:
         return jsonify({"response": f"Error: {str(e)}"}), 500
 
-def search_serpapi_duckduckgo(query):
-    params = {
-        "engine": "duckduckgo",
-        "q": query,
-        "kl": "us-en",
-        "api_key": os.getenv("SERPAPI_KEY")  # Store securely in .env or config
-    }
-    search = GoogleSearch(params)
-    results = search.get_dict()
 
-    if "organic_results" in results and results["organic_results"]:
-        top_results = results["organic_results"][:3]
-        return "\n".join(f"- {res.get('title')}: {res.get('link')}" for res in top_results)
-    else:
-        return "No relevant answer found."
 
 
 
