@@ -7,5 +7,5 @@ google-search-results
 python-dotenv
 transformers
 tensorflow
-
+keras
 
