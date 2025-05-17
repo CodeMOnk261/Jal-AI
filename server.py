@@ -68,6 +68,23 @@ def search_serpapi_duckduckgo(query):
         return "\n".join(f"{res.get('title')} — {res.get('snippet')}" for res in top_results if res.get('snippet'))
     else:
         return "No relevant answer found."
+def store_recent_query(uid, query):
+    query_ref = db.collection("users").document(uid).collection("recent_queries")
+    query_ref.add({
+        "query": query.lower().strip(),
+        "timestamp": datetime.utcnow()
+    })
+def is_duplicate_query(uid, query, time_window_minutes=10):
+    query_ref = db.collection("users").document(uid).collection("recent_queries")
+    time_threshold = datetime.utcnow() - timedelta(minutes=time_window_minutes)
+    docs = query_ref.where("timestamp", ">", time_threshold).stream()
+    normalized_query = query.lower().strip()
+
+    for doc in docs:
+        if doc.to_dict().get("query") == normalized_query:
+            return True
+    return False
+
 
 app = Flask(__name__)
 CORS(app)  # Allows frontend from any origin to talk to this API
@@ -107,12 +124,12 @@ def chat():
         messages.append({"role": "user", "content": user_message})  # Add current message
         if should_trigger_search(user_message):
             query = user_message.strip()
-            result_snippet = search_serpapi_duckduckgo(query)
-            # Store the snippet as a bot/system message so it appears in chat
-            store_message(uid, "bot", f"[Search Info] {result_snippet}")
-
-            messages.insert(0, {"role": "system", "content": f"You are an assistant that always uses the latest search result for accurate answers. Here is the updated information to use for the user's query:\n{result_snippet}"})
-
+        
+            if not is_duplicate_query(uid, query):
+                result_snippet = search_serpapi_duckduckgo(query)
+                store_recent_query(uid, query)
+                store_message(uid, "bot", f"[Search Info] {result_snippet}")
+                messages.append({"role": "system", "content": f"Use the following info to answer: {result_snippet}"})
 
 
         response = client.chat.completions.create(
