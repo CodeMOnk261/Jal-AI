@@ -12,7 +12,15 @@ import json
 import firebase_admin
 from firebase_admin import firestore
 from firebase_admin import credentials
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
+from transformers import pipeline
 
+model_name = "nateraw/bert-base-uncased-emotion"
+emotion_classifier = pipeline("text-classification", model=model_name, tokenizer=model_name)
+def detect_emotion(text):
+    result = emotion_classifier(text)[0]
+    return result['label'], result['score']
+    
 cred_dict = json.loads(os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON"))
 cred = credentials.Certificate(cred_dict)
 firebase_admin.initialize_app(cred)
