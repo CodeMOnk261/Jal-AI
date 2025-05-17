@@ -65,7 +65,7 @@ def search_serpapi_duckduckgo(query):
 
     if "organic_results" in results and results["organic_results"]:
         top_results = results["organic_results"][:3]
-        return "\n".join(f"- {res.get('title')}: {res.get('link')}" for res in top_results)
+        return "\n".join(f"{res.get('title')} — {res.get('snippet')}" for res in top_results if res.get('snippet'))
     else:
         return "No relevant answer found."
 
@@ -111,13 +111,8 @@ def chat():
             # Store the snippet as a bot/system message so it appears in chat
             store_message(uid, "bot", f"[Search Info] {result_snippet}")
 
-            messages.append({
-                "role": "system",
-                "content": (
-                    f"You must use the following updated real-time search result to answer the next question. "
-                    f"Ignore any outdated or internal knowledge. The current answer is:\n\n{result_snippet}"
-                    )
-            })
+            messages.insert(0, {"role": "system", "content": f"You are an assistant that always uses the latest search result for accurate answers. Here is the updated information to use for the user's query:\n{result_snippet}"})
+
 
 
         response = client.chat.completions.create(
