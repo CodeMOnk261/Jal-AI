@@ -4,6 +4,7 @@ from flask_cors import CORS
 from datetime import datetime, timedelta
 import string
 import time
+import requests
 import uuid
 import threading
 from together import Together
