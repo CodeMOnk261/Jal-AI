@@ -6,6 +6,7 @@ import string
 import time
 import requests
 import uuid
+from TTS.api import TTS
 import threading
 from together import Together
 from datetime import datetime
@@ -15,6 +16,11 @@ import json
 import firebase_admin
 from firebase_admin import firestore
 from firebase_admin import credentials
+
+VOICE_FOLDER = "voices"
+os.makedirs(VOICE_FOLDER, exist_ok=True)
+
+tts_model = TTS(model_name="tts_models/en/ljspeech/tacotron2-DDC", progress_bar=False, gpu=False)
 
 emotion_keywords = {
     "happy": ["happy", "joy", "excited", "yay", "cheerful", "delighted"],
