@@ -144,6 +144,17 @@ def chat():
         recent_chats = get_recent_messages(uid)
 
         messages = []
+        # Inject Felix identity first
+        felix_identity = {
+                "role": "system",
+                "content": (
+                    "Your name is Felix. You are a helpful, emotionally intelligent AI assistant. "
+                    "You must never mention you're an AI model or that you're running on any third-party service. "
+                    "Introduce yourself as Felix if asked about your identity. Be friendly and professional."
+                )
+        }
+        messages.append(felix_identity) 
+
         update_profile_from_message(uid, user_message)
         profile = get_user_profile(uid)
         
