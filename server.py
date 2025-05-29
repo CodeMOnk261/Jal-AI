@@ -1,9 +1,11 @@
 import os
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from datetime import datetime, timedelta
 import string
-
+import time
+import uuid
+import threading
 from together import Together
 from datetime import datetime
 from serpapi import GoogleSearch
@@ -204,8 +206,6 @@ def chat():
     
     except Exception as e:
         return jsonify({"response": f"Error: {str(e)}"}), 500
-
-
 
 
 
