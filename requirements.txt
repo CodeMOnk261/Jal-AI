@@ -6,5 +6,5 @@ serpapi
 google-search-results
 python-dotenv
 pyht
-
+requests
 
