@@ -7,6 +7,8 @@ import time
 from pyht import Client
 from pyht.client import TTSOptions
 from dotenv import load_dotenv
+# Load environment variables
+load_dotenv()
 from together import Together
 from datetime import datetime
 from serpapi import GoogleSearch
@@ -211,9 +213,6 @@ def chat():
     except Exception as e:
         return jsonify({"response": f"Error: {str(e)}"}), 500
         
-
-# Load environment variables
-load_dotenv()
 
 # Play.ht client setup
 client = Client(
