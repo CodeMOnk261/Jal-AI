@@ -4,6 +4,7 @@ from flask_cors import CORS
 from datetime import datetime, timedelta
 import string
 import time
+import requests
 from pyht import Client
 from pyht.client import TTSOptions
 from dotenv import load_dotenv
@@ -215,13 +216,13 @@ def chat():
         
 
 # Play.ht client setup
-client = Client(
-    user_id=os.getenv("PLAY_HT_USER_ID"),
-    api_key=os.getenv("PLAY_HT_API_KEY"),
-)
-tts_options = TTSOptions(
-    voice="s3://voice-cloning-zero-shot/775ae416-49bb-4fb6-bd45-740f205d20a1/jennifersaad/manifest.json"
-)
+
+app = Flask(__name__)
+
+# Play.ht credentials (store these securely in environment variables ideally)
+PLAYHT_USER_ID = "your-user-id-here"
+PLAYHT_API_KEY = "your-api-key-here"
+
 
 VOICE_FOLDER = "voices"
 os.makedirs(VOICE_FOLDER, exist_ok=True)
@@ -268,20 +269,38 @@ def tts():
         if has_exceeded_tts_limit(uid):
             return jsonify({"error": "TTS daily limit reached (1,000 characters). Try again tomorrow."}), 429
 
-        filename = f"{uid}_{str(uuid.uuid4())}.wav"
-        filepath = os.path.join(VOICE_FOLDER, filename)
+        payload = {
+            "text": text,
+            "voice": "s3://voice-cloning-zero-shot/d9ff78ba-d016-47f6-b0ef-dd630f59414e/female-cs/manifest.json",
+            "output_format": "wav",
+            "voice_engine": "PlayDialog"
+        }
 
-        # Generate audio using Play.ht
-        with open(filepath, "wb") as audio_file:
-            for chunk in client.tts(text, tts_options, voice_engine='PlayDialog-http'):
-                audio_file.write(chunk)
+        headers = {
+            "accept": "*/*",
+            "content-type": "application/json",
+            "X-User-Id": os.getenv("PLAY_HT_USER_ID"),
+            "Authorization": os.getenv("PLAY_HT_SECRET_KEY")
+        }
 
-        update_tts_usage(uid, len(text))  # Track usage
+        response = requests.post("https://api.play.ht/api/v2/tts/stream", json=payload, headers=headers)
 
-        return jsonify({"url": f"/api/tts/play/{filename}"})
+        if response.status_code == 200:
+            filename = f"{uid}_{uuid.uuid4()}.wav"
+            filepath = os.path.join(VOICE_FOLDER, filename)
+
+            with open(filepath, "wb") as f:
+                f.write(response.content)
+
+            update_tts_usage(uid, len(text))
+
+            return jsonify({"url": f"/api/tts/play/{filename}"})
+        else:
+            return jsonify({"error": "TTS request failed", "details": response.text}), 500
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 
 @app.route('/api/tts/play/<filename>')
