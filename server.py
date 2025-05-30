@@ -20,7 +20,7 @@ from firebase_admin import firestore
 from firebase_admin import credentials
 import uuid
 print("USER_ID:", os.getenv("PLAY_HT_USER_ID"))
-print("SECRET_KEY:", os.getenv("PLAY_HT_SECRET_KEY"))
+print("SECRET_KEY:", os.getenv("PLAY_HT_API_KEY"))
 
 emotion_keywords = {
     "happy": ["happy", "joy", "excited", "yay", "cheerful", "delighted"],
@@ -219,9 +219,7 @@ def chat():
 
 app = Flask(__name__)
 
-# Play.ht credentials (store these securely in environment variables ideally)
-PLAYHT_USER_ID = "your-user-id-here"
-PLAYHT_API_KEY = "your-api-key-here"
+# Play.ht credentials (store these securely in environment variables ideally
 
 
 VOICE_FOLDER = "voices"
@@ -280,7 +278,7 @@ def tts():
             "accept": "*/*",
             "content-type": "application/json",
             "X-User-Id": os.getenv("PLAY_HT_USER_ID"),
-            "Authorization": os.getenv("PLAY_HT_SECRET_KEY")
+            "Authorization": os.getenv("PLAY_HT_API_KEY")
         }
 
         response = requests.post("https://api.play.ht/api/v2/tts/stream", json=payload, headers=headers)
