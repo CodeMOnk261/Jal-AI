@@ -16,7 +16,8 @@ import firebase_admin
 from firebase_admin import firestore
 from firebase_admin import credentials
 import uuid
-
+print("USER_ID:", os.getenv("PLAY_HT_USER_ID"))
+print("SECRET_KEY:", os.getenv("PLAY_HT_SECRET_KEY"))
 
 emotion_keywords = {
     "happy": ["happy", "joy", "excited", "yay", "cheerful", "delighted"],
