@@ -4,6 +4,9 @@ from flask_cors import CORS
 from datetime import datetime, timedelta
 import string
 import time
+from pyht import Client
+from pyht.client import TTSOptions
+from dotenv import load_dotenv
 from together import Together
 from datetime import datetime
 from serpapi import GoogleSearch
@@ -12,7 +15,7 @@ import json
 import firebase_admin
 from firebase_admin import firestore
 from firebase_admin import credentials
-
+import uuid
 
 
 emotion_keywords = {
@@ -206,7 +209,98 @@ def chat():
     
     except Exception as e:
         return jsonify({"response": f"Error: {str(e)}"}), 500
+        
 
+# Load environment variables
+load_dotenv()
+
+# Play.ht client setup
+client = Client(
+    user_id=os.getenv("PLAY_HT_USER_ID"),
+    api_key=os.getenv("PLAY_HT_API_KEY"),
+)
+tts_options = TTSOptions(
+    voice="s3://voice-cloning-zero-shot/775ae416-49bb-4fb6-bd45-740f205d20a1/jennifersaad/manifest.json"
+)
+
+VOICE_FOLDER = "voices"
+os.makedirs(VOICE_FOLDER, exist_ok=True)
+
+
+def update_tts_usage(uid, char_count):
+    doc_ref = db.collection("users").document(uid).collection("usage").document("tts")
+    doc = doc_ref.get()
+
+    today = datetime.utcnow().date().isoformat()
+
+    if doc.exists:
+        data = doc.to_dict()
+        if data.get("date") == today:
+            data["char_count"] += char_count
+        else:
+            data = {"char_count": char_count, "date": today}
+    else:
+        data = {"char_count": char_count, "date": today}
+
+    doc_ref.set(data)
+
+
+def has_exceeded_tts_limit(uid, max_chars=1000):
+    doc = db.collection("users").document(uid).collection("usage").document("tts").get()
+    today = datetime.utcnow().date().isoformat()
+
+    if doc.exists:
+        data = doc.to_dict()
+        return data.get("date") == today and data.get("char_count", 0) >= max_chars
+    return False
+
+
+@app.route('/api/tts', methods=['POST'])
+def tts():
+    try:
+        data = request.get_json()
+        text = data.get("text", "")
+        uid = data.get("uid", "")
+
+        if not text or not uid:
+            return jsonify({"error": "Text and UID are required."}), 400
+
+        if has_exceeded_tts_limit(uid):
+            return jsonify({"error": "TTS daily limit reached (1,000 characters). Try again tomorrow."}), 429
+
+        filename = f"{uid}_{str(uuid.uuid4())}.wav"
+        filepath = os.path.join(VOICE_FOLDER, filename)
+
+        # Generate audio using Play.ht
+        with open(filepath, "wb") as audio_file:
+            for chunk in client.tts(text, tts_options, voice_engine='PlayDialog-http'):
+                audio_file.write(chunk)
+
+        update_tts_usage(uid, len(text))  # Track usage
+
+        return jsonify({"url": f"/api/tts/play/{filename}"})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/tts/play/<filename>')
+def play_voice(filename):
+    filepath = os.path.join(VOICE_FOLDER, filename)
+
+    if os.path.exists(filepath):
+        response = send_file(filepath, mimetype="audio/wav")
+
+        @response.call_on_close
+        def cleanup():
+            try:
+                os.remove(filepath)
+            except Exception:
+                pass
+
+        return response
+    else:
+        return jsonify({"error": "Voice not found"}), 404
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
