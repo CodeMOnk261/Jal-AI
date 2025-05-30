@@ -5,10 +5,5 @@ firebase_admin
 serpapi
 google-search-results
 python-dotenv
-requests
-uuid
-coqui-tts
-numpy
-torch
-soundfile
+
 
