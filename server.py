@@ -4,10 +4,6 @@ from flask_cors import CORS
 from datetime import datetime, timedelta
 import string
 import time
-import requests
-import uuid
-from TTS.api import TTS
-import threading
 from together import Together
 from datetime import datetime
 from serpapi import GoogleSearch
@@ -17,10 +13,7 @@ import firebase_admin
 from firebase_admin import firestore
 from firebase_admin import credentials
 
-VOICE_FOLDER = "voices"
-os.makedirs(VOICE_FOLDER, exist_ok=True)
 
-tts_model = TTS(model_name="tts_models/en/ljspeech/tacotron2-DDC", progress_bar=False, gpu=False)
 
 emotion_keywords = {
     "happy": ["happy", "joy", "excited", "yay", "cheerful", "delighted"],
@@ -213,59 +206,6 @@ def chat():
     
     except Exception as e:
         return jsonify({"response": f"Error: {str(e)}"}), 500
-        
-@app.route('/api/tts', methods=['POST'])
-def tts():
-    try:
-        data = request.get_json()
-        text = data.get("text", "")
-        uid = data.get("uid", "")
-
-        if not text or not uid:
-            return jsonify({"error": "Text and UID are required."}), 400
-
-        voice_id = str(uuid.uuid4())
-        filename = f"{uid}_{voice_id}.wav"
-        filepath = os.path.join(VOICE_FOLDER, filename)
-
-        # Generate TTS
-        tts_model.tts_to_file(text=text, file_path=filepath)
-
-        return jsonify({"url": f"/api/tts/play/{filename}"})
-    
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/api/tts/play/<filename>')
-def play_voice(filename):
-    filepath = os.path.join(VOICE_FOLDER, filename)
-
-    if os.path.exists(filepath):
-        response = send_file(filepath, mimetype="audio/wav")
-
-        # Delete after sending (after response is complete)
-        @response.call_on_close
-        def cleanup():
-            try:
-                os.remove(filepath)
-            except Exception:
-                pass
-
-        return response
-    else:
-        return jsonify({"error": "Voice not found"}), 404
-
-
-def auto_cleanup():
-    while True:
-        for f in os.listdir(VOICE_FOLDER):
-            fp = os.path.join(VOICE_FOLDER, f)
-            if os.path.isfile(fp) and time.time() - os.path.getmtime(fp) > 300:
-                os.remove(fp)
-        time.sleep(60)  # Check every 1 min
-
-# Run in background
-threading.Thread(target=auto_cleanup, daemon=True).start()
 
 
 if __name__ == '__main__':
