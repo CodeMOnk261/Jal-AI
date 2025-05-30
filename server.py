@@ -214,11 +214,6 @@ def chat():
     except Exception as e:
         return jsonify({"response": f"Error: {str(e)}"}), 500
         
-
-# Play.ht client setup
-
-app = Flask(__name__)
-
 # Play.ht credentials (store these securely in environment variables ideally
 
 
