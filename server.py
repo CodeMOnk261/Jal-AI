@@ -201,7 +201,7 @@ def chat():
         user_emotion = detect_emotion(user_message)
 
         response = client.chat.completions.create(
-            model="nstruct-Turbo-Free",
+            model="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
             messages=messages,
             stream=False
         )
