@@ -136,7 +136,8 @@ def is_duplicate_query(uid, query, time_window_minutes=10):
 
 
 app = Flask(__name__)
-CORS(app)  # Allows frontend from any origin to talk to this API
+CORS(app)
+CORS(app, origins=["http://localhost:5173"])# Allows frontend from any origin to talk to this API
 
 client = Together(api_key=os.getenv("TOGETHER_API_KEY"))  # Use your real API key here
 
