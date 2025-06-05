@@ -19,6 +19,7 @@ import firebase_admin
 from firebase_admin import firestore
 from firebase_admin import credentials
 import uuid
+
 print("USER_ID:", os.getenv("PLAY_HT_USER_ID"))
 print("SECRET_KEY:", os.getenv("PLAY_HT_API_KEY"))
 
@@ -61,6 +62,7 @@ cred_dict = json.loads(os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON"))
 cred = credentials.Certificate(cred_dict)
 firebase_admin.initialize_app(cred)
 db = firestore.client()
+
 def store_message(uid, sender, message):
     chat_ref = db.collection("users").document(uid).collection("chats")
     chat_ref.add({
@@ -68,31 +70,30 @@ def store_message(uid, sender, message):
         "message": message,
         "timestamp": datetime.utcnow()
     })
+
 def get_recent_messages(uid, limit=20):
     chat_ref = db.collection("users").document(uid).collection("chats")
     docs = chat_ref.order_by("timestamp", direction=firestore.Query.DESCENDING).limit(limit).stream()
     return list(reversed([{**doc.to_dict()} for doc in docs]))
 
 def should_trigger_search(message):
-    # Define a list of regex patterns for common queries
     patterns = [
-        r"\b(what|who|where|how|define|tell me about|explain)\b.*",  # Matches "What is...", "Who is...", etc.
-        r".*\b(news|latest|update|today|current)\b.*",  # Matches messages asking for current or recent info
-        r"\b(how to|tutorial|guide)\b.*"  # Matches how-to requests
+        r"\b(what|who|where|how|define|tell me about|explain)\b.*",
+        r".*\b(news|latest|update|today|current)\b.*",
+        r"\b(how to|tutorial|guide)\b.*"
     ]
-    
-    # Check if any pattern matches the message
     for pattern in patterns:
-        if re.match(pattern, message, re.IGNORECASE):  # re.IGNORECASE makes the search case-insensitive
+        if re.match(pattern, message, re.IGNORECASE):
             return True
-
     return False
+
 def get_user_profile(uid):
     doc = db.collection("users").document(uid).get()
     return doc.to_dict() if doc.exists else {}
 
 def update_user_profile(uid, profile_data):
     db.collection("users").document(uid).set(profile_data, merge=True)
+
 def update_profile_from_message(uid, message):
     if "my name is" in message.lower():
         name = message.split("my name is")[-1].strip().split(" ")[0]
@@ -100,12 +101,13 @@ def update_profile_from_message(uid, message):
     if "i like" in message.lower():
         hobby = message.split("i like")[-1].strip().split(" ")[0]
         update_user_profile(uid, {"hobby": hobby})
+
 def search_serpapi_duckduckgo(query):
     params = {
         "engine": "duckduckgo",
         "q": query,
         "kl": "us-en",
-        "api_key": os.getenv("SERPAPI_KEY")  # Store securely in .env or config
+        "api_key": os.getenv("SERPAPI_KEY")
     }
     search = GoogleSearch(params)
     results = search.get_dict()
@@ -115,6 +117,7 @@ def search_serpapi_duckduckgo(query):
         return "\n".join(f"{res.get('title')} — {res.get('snippet')}" for res in top_results if res.get('snippet'))
     else:
         return "No relevant answer found."
+
 def store_recent_query(uid, query):
     query_ref = db.collection("users").document(uid).collection("recent_queries")
     query_ref.add({
@@ -133,15 +136,25 @@ def is_duplicate_query(uid, query, time_window_minutes=10):
             return True
     return False
 
-
-
 app = Flask(__name__)
-CORS(app, supports_credentials=True)# Allows frontend from any origin to talk to this API
 
-client = Together(api_key=os.getenv("TOGETHER_API_KEY"))  # Use your real API key here
+# --- Updated CORS setup ---
+CORS(
+    app,
+    origins=["https://felix-c7ba9.web.app"],  # frontend origin
+    supports_credentials=True,
+    methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"]
+)
 
-@app.route('/api/chat', methods=['POST'])
+client = Together(api_key=os.getenv("TOGETHER_API_KEY"))
+
+@app.route('/api/chat', methods=['POST', 'OPTIONS'])
 def chat():
+    if request.method == 'OPTIONS':
+        # Properly respond to preflight requests
+        return '', 200
+
     data = request.get_json()
     user_message = data.get("message", "")
 
@@ -153,42 +166,32 @@ def chat():
         recent_chats = get_recent_messages(uid)
 
         messages = []
-        # Inject Felix identity first
+        # Felix identity system prompt
         felix_identity = {
-                "role": "system",
-                "content": (
-                    "Your name is Felix. You are a helpful, emotionally intelligent AI assistant. "
-                    "You must never mention you're an AI model or that you're running on any third-party service. "
-                    "Introduce yourself as Felix if asked about your identity. Be friendly and professional."
-                )
+            "role": "system",
+            "content": (
+                "Your name is Felix. You are a helpful, emotionally intelligent AI assistant. "
+                "You must never mention you're an AI model or that you're running on any third-party service. "
+                "Introduce yourself as Felix if asked about your identity. Be friendly and professional."
+            )
         }
-        messages.append(felix_identity) 
+        messages.append(felix_identity)
 
         update_profile_from_message(uid, user_message)
         profile = get_user_profile(uid)
         
-        # Inject as a system prompt
         if profile:
             profile_intro = f"The user's name is {profile.get('name', 'unknown')} and their hobby is {profile.get('hobby', 'unknown')}."
             messages.insert(1, {"role": "system", "content": profile_intro})
 
-
-
-       
-
-        
         for chat in recent_chats:
             role = "user" if chat["sender"] == "user" else "assistant"
             messages.append({"role": role, "content": chat["message"]})
 
-        messages.append({"role": "user", "content": user_message})# Add current message
-
-# Compare against past normalized queries stored in Firestore, like:
-# {"normalized": "president usa", "original": "who is president of USA", "timestamp": ...}
+        messages.append({"role": "user", "content": user_message})
 
         if should_trigger_search(user_message):
             query = user_message.strip()
-        
             if not is_duplicate_query(uid, query):
                 result_snippet = search_serpapi_duckduckgo(query)
                 store_recent_query(uid, query)
@@ -198,7 +201,7 @@ def chat():
         user_emotion = detect_emotion(user_message)
 
         response = client.chat.completions.create(
-            model="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
+            model="nstruct-Turbo-Free",
             messages=messages,
             stream=False
         )
@@ -210,16 +213,12 @@ def chat():
         store_message(uid, "bot", reply)
 
         return jsonify({'response': toned_response})
-    
+
     except Exception as e:
         return jsonify({"response": f"Error: {str(e)}"}), 500
-        
-# Play.ht credentials (store these securely in environment variables ideally
-
 
 VOICE_FOLDER = "voices"
 os.makedirs(VOICE_FOLDER, exist_ok=True)
-
 
 def update_tts_usage(uid, char_count):
     doc_ref = db.collection("users").document(uid).collection("usage").document("tts")
@@ -238,7 +237,6 @@ def update_tts_usage(uid, char_count):
 
     doc_ref.set(data)
 
-
 def has_exceeded_tts_limit(uid, max_chars=1000):
     doc = db.collection("users").document(uid).collection("usage").document("tts").get()
     today = datetime.utcnow().date().isoformat()
@@ -248,9 +246,11 @@ def has_exceeded_tts_limit(uid, max_chars=1000):
         return data.get("date") == today and data.get("char_count", 0) >= max_chars
     return False
 
-
-@app.route('/api/tts', methods=['POST'])
+@app.route('/api/tts', methods=['POST', 'OPTIONS'])
 def tts():
+    if request.method == 'OPTIONS':
+        return '', 200
+
     try:
         data = request.get_json()
         text = data.get("text", "")
@@ -294,8 +294,6 @@ def tts():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
-
 @app.route('/api/tts/play/<filename>')
 def play_voice(filename):
     filepath = os.path.join(VOICE_FOLDER, filename)
@@ -317,4 +315,3 @@ def play_voice(filename):
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
-
