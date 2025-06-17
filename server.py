@@ -135,6 +135,12 @@ def is_duplicate_query(uid, query, time_window_minutes=10):
         if doc.to_dict().get("query") == normalized_query:
             return True
     return False
+    
+@app.route("/", methods=["GET", "OPTIONS"])
+def index():
+    if request.method == "OPTIONS":
+        return '', 200
+    return "Felix backend is alive!"
 
 app = Flask(__name__)
 
