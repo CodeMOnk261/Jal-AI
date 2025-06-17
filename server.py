@@ -132,7 +132,7 @@ def call_serpapi(params):
 
 client = Together(api_key=os.getenv("TOGETHER_API_KEY"))
 
-@app.route("/", methods=["GET"])
+@app.route("/", methods=["POST"])
 def index():
     return jsonify({"status": "Felix backend is alive!"}), 200
 
