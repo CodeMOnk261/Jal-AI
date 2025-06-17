@@ -136,11 +136,7 @@ def is_duplicate_query(uid, query, time_window_minutes=10):
             return True
     return False
     
-@app.route("/", methods=["GET", "OPTIONS"])
-def index():
-    if request.method == "OPTIONS":
-        return '', 200
-    return "Felix backend is alive!"
+
 
 app = Flask(__name__)
 
@@ -152,6 +148,12 @@ CORS(
     methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"]
 )
+
+@app.route("/", methods=["GET", "OPTIONS"])
+def index():
+    if request.method == "OPTIONS":
+        return '', 200
+    return "Felix backend is alive!"
 
 client = Together(api_key=os.getenv("TOGETHER_API_KEY"))
 
