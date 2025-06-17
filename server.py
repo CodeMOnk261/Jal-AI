@@ -4,8 +4,9 @@ import uuid
 import json
 import string
 import time
+import logging
 import requests
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify, send_file, make_response
 from flask_cors import CORS
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
@@ -17,15 +18,19 @@ from firebase_admin import firestore, credentials
 # Load environment variables
 load_dotenv()
 
-# Initialize Flask app and CORS before any routes
+# Initialize Flask app and configure CORS
 app = Flask(__name__)
 CORS(
     app,
-    origins=["https://felix-c7ba9.web.app"],  # frontend origin
+    origins=["https://felix-c7ba9.web.app"],
     supports_credentials=True,
     methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"]
 )
+
+# Logger setup
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Firebase setup
 cred_dict = json.loads(os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON"))
@@ -33,10 +38,6 @@ cred = credentials.Certificate(cred_dict)
 if not firebase_admin._apps:
     firebase_admin.initialize_app(cred)
 db = firestore.client()
-
-# Play.ht Debug Output (remove in production)
-# print("USER_ID:", os.getenv("PLAY_HT_USER_ID"))
-# print("SECRET_KEY:", os.getenv("PLAY_HT_API_KEY"))
 
 # Emotion setup
 emotion_keywords = {
@@ -62,25 +63,18 @@ def detect_emotion(text):
 
 def apply_tone(response, user_input):
     emotion = detect_emotion(user_input)
-    if emotion == "happy":
-        return tone_happy(response)
-    elif emotion == "sad":
-        return tone_sad(response)
-    elif emotion == "angry":
-        return tone_angry(response)
-    elif emotion == "love":
-        return tone_love(response)
-    elif emotion == "fear":
-        return tone_fear(response)
-    return response
+    tone_func = {
+        "happy": tone_happy,
+        "sad": tone_sad,
+        "angry": tone_angry,
+        "love": tone_love,
+        "fear": tone_fear
+    }.get(emotion, lambda x: x)
+    return tone_func(response)
 
 def store_message(uid, sender, message):
     chat_ref = db.collection("users").document(uid).collection("chats")
-    chat_ref.add({
-        "sender": sender,
-        "message": message,
-        "timestamp": datetime.utcnow()
-    })
+    chat_ref.add({"sender": sender, "message": message, "timestamp": datetime.utcnow()})
 
 def get_recent_messages(uid, limit=20):
     chat_ref = db.collection("users").document(uid).collection("chats")
@@ -88,15 +82,8 @@ def get_recent_messages(uid, limit=20):
     return list(reversed([{**doc.to_dict()} for doc in docs]))
 
 def should_trigger_search(message):
-    patterns = [
-        r"\b(what|who|where|how|define|tell me about|explain)\b.*",
-        r".*\b(news|latest|update|today|current)\b.*",
-        r"\b(how to|tutorial|guide)\b.*"
-    ]
-    for pattern in patterns:
-        if re.search(pattern, message, re.IGNORECASE):
-            return True
-    return False
+    patterns = [r"\b(what|who|where|how|define|tell me about|explain)\b.*", r".*\b(news|latest|update|today|current)\b.*", r"\b(how to|tutorial|guide)\b.*"]
+    return any(re.search(pattern, message, re.IGNORECASE) for pattern in patterns)
 
 def get_user_profile(uid):
     doc = db.collection("users").document(uid).get()
@@ -106,12 +93,12 @@ def update_user_profile(uid, profile_data):
     db.collection("users").document(uid).set(profile_data, merge=True)
 
 def update_profile_from_message(uid, message):
-    if "my name is" in message.lower():
-        name = message.split("my name is")[-1].strip().split(" ")[0]
-        update_user_profile(uid, {"name": name})
-    if "i like" in message.lower():
-        hobby = message.split("i like")[-1].strip().split(" ")[0]
-        update_user_profile(uid, {"hobby": hobby})
+    name_match = re.search(r"my name is (\w+)", message, re.IGNORECASE)
+    hobby_match = re.search(r"i like (\w+)", message, re.IGNORECASE)
+    if name_match:
+        update_user_profile(uid, {"name": name_match.group(1)})
+    if hobby_match:
+        update_user_profile(uid, {"hobby": hobby_match.group(1)})
 
 def search_serpapi_duckduckgo(query):
     params = {
@@ -122,72 +109,42 @@ def search_serpapi_duckduckgo(query):
     }
     search = GoogleSearch(params)
     results = search.get_dict()
-
     if "organic_results" in results and results["organic_results"]:
-        top_results = results["organic_results"][:3]
-        return "\n".join(f"{res.get('title')} — {res.get('snippet')}" for res in top_results if res.get('snippet'))
-    else:
-        return "No relevant answer found."
+        return "\n".join(f"{res.get('title')} — {res.get('snippet')}" for res in results["organic_results"][:3] if res.get('snippet'))
+    return "No relevant answer found."
 
 def store_recent_query(uid, query):
-    query_ref = db.collection("users").document(uid).collection("recent_queries")
-    query_ref.add({
-        "query": query.lower().strip(),
-        "timestamp": datetime.utcnow()
-    })
+    db.collection("users").document(uid).collection("recent_queries").add({"query": query.lower().strip(), "timestamp": datetime.utcnow()})
 
 def is_duplicate_query(uid, query, time_window_minutes=10):
-    query_ref = db.collection("users").document(uid).collection("recent_queries")
     time_threshold = datetime.utcnow() - timedelta(minutes=time_window_minutes)
-    docs = query_ref.where("timestamp", ">", time_threshold).stream()
+    docs = db.collection("users").document(uid).collection("recent_queries").where("timestamp", ">", time_threshold).stream()
     normalized_query = query.lower().strip()
-
-    for doc in docs:
-        if doc.to_dict().get("query") == normalized_query:
-            return True
-    return False
+    return any(doc.to_dict().get("query") == normalized_query for doc in docs)
 
 client = Together(api_key=os.getenv("TOGETHER_API_KEY"))
 
-@app.route("/", methods=["GET", "OPTIONS"])
+@app.route("/", methods=["GET"])
 def index():
-    if request.method == "OPTIONS":
-        return '', 200
-    return "Felix backend is alive!"
+    return jsonify({"status": "Felix backend is alive!"}), 200
 
-@app.route('/api/chat', methods=['POST', 'OPTIONS'])
+@app.route("/api/chat", methods=["POST"])
 def chat():
-    if request.method == 'OPTIONS':
-        return '', 200
-
-    data = request.get_json()
-    user_message = data.get("message", "")
-
-    if not user_message:
-        return jsonify({"response": "Please enter a message."}), 400
-
     try:
+        data = request.get_json()
+        user_message = data.get("message", "").strip()
         uid = data.get("uid")
-        recent_chats = get_recent_messages(uid)
 
-        messages = []
-        felix_identity = {
-            "role": "system",
-            "content": (
-                "Your name is Felix. You are a helpful, emotionally intelligent AI assistant. "
-                "You must never mention you're an AI model or that you're running on any third-party service. "
-                "Introduce yourself as Felix if asked about your identity. Be friendly and professional."
-                "You are allowed to mention to say you are an open source LLM provided by together API services."
-            )
-        }
-        messages.append(felix_identity)
+        if not user_message:
+            return jsonify({"response": "Please enter a message."}), 400
+
+        recent_chats = get_recent_messages(uid)
+        messages = [{"role": "system", "content": "Your name is Felix. You are a helpful, emotionally intelligent AI assistant. You must never mention you're an AI model or that you're running on any third-party service. Introduce yourself as Felix if asked about your identity. Be friendly and professional."}]
 
         update_profile_from_message(uid, user_message)
         profile = get_user_profile(uid)
-
         if profile:
-            profile_intro = f"The user's name is {profile.get('name', 'unknown')} and their hobby is {profile.get('hobby', 'unknown')}."
-            messages.insert(1, {"role": "system", "content": profile_intro})
+            messages.append({"role": "system", "content": f"The user's name is {profile.get('name', 'unknown')} and their hobby is {profile.get('hobby', 'unknown')}."})
 
         for chat in recent_chats:
             role = "user" if chat["sender"] == "user" else "assistant"
@@ -195,13 +152,11 @@ def chat():
 
         messages.append({"role": "user", "content": user_message})
 
-        if should_trigger_search(user_message):
-            query = user_message.strip()
-            if not is_duplicate_query(uid, query):
-                result_snippet = search_serpapi_duckduckgo(query)
-                store_recent_query(uid, query)
-                store_message(uid, "bot", f"[Search Info] {result_snippet}")
-                messages.append({"role": "system", "content": f"Use the following info to answer: {result_snippet}"})
+        if should_trigger_search(user_message) and not is_duplicate_query(uid, user_message):
+            result_snippet = search_serpapi_duckduckgo(user_message)
+            store_recent_query(uid, user_message)
+            store_message(uid, "bot", f"[Search Info] {result_snippet}")
+            messages.append({"role": "system", "content": f"Use the following info to answer: {result_snippet}"})
 
         response = client.chat.completions.create(
             model="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
@@ -214,10 +169,11 @@ def chat():
         toned_response = apply_tone(reply, user_message)
         store_message(uid, "bot", reply)
 
-        return jsonify({'response': toned_response})
+        return jsonify({"response": toned_response})
 
     except Exception as e:
-        return jsonify({"response": f"Error: {str(e)}"}), 500
+        logger.exception("Error during /api/chat")
+        return jsonify({"response": f"Server error: {str(e)}"}), 500
 
 VOICE_FOLDER = "voices"
 os.makedirs(VOICE_FOLDER, exist_ok=True)
@@ -225,15 +181,11 @@ os.makedirs(VOICE_FOLDER, exist_ok=True)
 def update_tts_usage(uid, char_count):
     doc_ref = db.collection("users").document(uid).collection("usage").document("tts")
     doc = doc_ref.get()
-
     today = datetime.utcnow().date().isoformat()
+    data = doc.to_dict() if doc.exists else {}
 
-    if doc.exists:
-        data = doc.to_dict()
-        if data.get("date") == today:
-            data["char_count"] += char_count
-        else:
-            data = {"char_count": char_count, "date": today}
+    if data.get("date") == today:
+        data["char_count"] = data.get("char_count", 0) + char_count
     else:
         data = {"char_count": char_count, "date": today}
 
@@ -242,21 +194,17 @@ def update_tts_usage(uid, char_count):
 def has_exceeded_tts_limit(uid, max_chars=1000):
     doc = db.collection("users").document(uid).collection("usage").document("tts").get()
     today = datetime.utcnow().date().isoformat()
-
     if doc.exists:
         data = doc.to_dict()
         return data.get("date") == today and data.get("char_count", 0) >= max_chars
     return False
 
-@app.route('/api/tts', methods=['POST', 'OPTIONS'])
+@app.route("/api/tts", methods=["POST"])
 def tts():
-    if request.method == 'OPTIONS':
-        return '', 200
-
     try:
         data = request.get_json()
-        text = data.get("text", "")
-        uid = data.get("uid", "")
+        text = data.get("text", "").strip()
+        uid = data.get("uid", "").strip()
 
         if not text or not uid:
             return jsonify({"error": "Text and UID are required."}), 400
@@ -279,40 +227,46 @@ def tts():
         }
 
         response = requests.post("https://api.play.ht/api/v2/tts/stream", json=payload, headers=headers)
-
         if response.status_code == 200:
             filename = f"{uid}_{uuid.uuid4()}.wav"
             filepath = os.path.join(VOICE_FOLDER, filename)
-
             with open(filepath, "wb") as f:
                 f.write(response.content)
-
             update_tts_usage(uid, len(text))
-
             return jsonify({"url": f"/api/tts/play/{filename}"})
         else:
             return jsonify({"error": "TTS request failed", "details": response.text}), 500
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        logger.exception("TTS error")
+        return jsonify({"error": f"Server error: {str(e)}"}), 500
 
-@app.route('/api/tts/play/<filename>')
+@app.route("/api/tts/play/<filename>", methods=["GET"])
 def play_voice(filename):
     filepath = os.path.join(VOICE_FOLDER, filename)
-
     if os.path.exists(filepath):
         response = send_file(filepath, mimetype="audio/wav")
-
         @response.call_on_close
         def cleanup():
             try:
                 os.remove(filepath)
-            except Exception:
-                pass
-
+            except Exception as e:
+                logger.warning(f"Could not delete TTS file: {e}")
         return response
-    else:
-        return jsonify({"error": "Voice not found"}), 404
+    return jsonify({"error": "Voice not found"}), 404
+
+@app.errorhandler(405)
+def method_not_allowed(e):
+    return jsonify({"error": "Method not allowed"}), 405
+
+@app.errorhandler(404)
+def not_found(e):
+    return jsonify({"error": "Not found"}), 404
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    logger.exception("Unhandled exception")
+    return jsonify({"error": "An unexpected error occurred."}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
