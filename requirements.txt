@@ -7,5 +7,4 @@ google-search-results
 python-dotenv
 pyht
 requests
-unctools
 tenacity
