@@ -113,7 +113,7 @@ def is_duplicate_query(uid, query, time_window_minutes=10):
 def cached_recent_query(uid, query):
     return is_duplicate_query(uid, query)
 
-def is_rate_limited(uid, limit=20, window_sec=60):
+def is_rate_limited(uid, limit=200, window_sec=60):
     now = datetime.utcnow()
     threshold = now - timedelta(seconds=window_sec)
     logs = db.collection("users").document(uid).collection("rate_limit").where("timestamp", ">", threshold).stream()
@@ -132,12 +132,8 @@ def call_serpapi(params):
 
 client = Together(api_key=os.getenv("TOGETHER_API_KEY"))
 
-@app.route("/", methods=["POST"])
-def index():
-    return jsonify({"status": "Felix backend is alive!"}), 200
-
-@app.route("/api/chat", methods=["POST", "OPTIONS"])
-def chat():
+@app.route("/", methods=["POST", "OPTIONS"])
+def index_chat():
     if request.method == "OPTIONS":
         return build_cors_response()
 
@@ -148,7 +144,7 @@ def chat():
     user_message = data.get("message", "").strip()
     uid = data.get("uid")
 
-    if not user_message:
+    if not user_message or not uid:
         return jsonify({"response": "Please enter a message."}), 400
 
     if is_rate_limited(uid):
