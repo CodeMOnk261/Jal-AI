@@ -1,28 +1,44 @@
 import os
-from flask import Flask, request, jsonify, send_file
-from flask_cors import CORS
-from datetime import datetime, timedelta
+import re
+import uuid
+import json
 import string
 import time
 import requests
-from pyht import Client
-from pyht.client import TTSOptions
+from flask import Flask, request, jsonify, send_file
+from flask_cors import CORS
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
+from together import Together
+from serpapi import GoogleSearch
+import firebase_admin
+from firebase_admin import firestore, credentials
+
 # Load environment variables
 load_dotenv()
-from together import Together
-from datetime import datetime
-from serpapi import GoogleSearch
-import re
-import json
-import firebase_admin
-from firebase_admin import firestore
-from firebase_admin import credentials
-import uuid
 
-print("USER_ID:", os.getenv("PLAY_HT_USER_ID"))
-print("SECRET_KEY:", os.getenv("PLAY_HT_API_KEY"))
+# Initialize Flask app and CORS before any routes
+app = Flask(__name__)
+CORS(
+    app,
+    origins=["https://felix-c7ba9.web.app"],  # frontend origin
+    supports_credentials=True,
+    methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"]
+)
 
+# Firebase setup
+cred_dict = json.loads(os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON"))
+cred = credentials.Certificate(cred_dict)
+if not firebase_admin._apps:
+    firebase_admin.initialize_app(cred)
+db = firestore.client()
+
+# Play.ht Debug Output (remove in production)
+# print("USER_ID:", os.getenv("PLAY_HT_USER_ID"))
+# print("SECRET_KEY:", os.getenv("PLAY_HT_API_KEY"))
+
+# Emotion setup
 emotion_keywords = {
     "happy": ["happy", "joy", "excited", "yay", "cheerful", "delighted"],
     "sad": ["sad", "depressed", "unhappy", "cry", "tears", "gloomy"],
@@ -57,11 +73,6 @@ def apply_tone(response, user_input):
     elif emotion == "fear":
         return tone_fear(response)
     return response
-    
-cred_dict = json.loads(os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON"))
-cred = credentials.Certificate(cred_dict)
-firebase_admin.initialize_app(cred)
-db = firestore.client()
 
 def store_message(uid, sender, message):
     chat_ref = db.collection("users").document(uid).collection("chats")
@@ -83,7 +94,7 @@ def should_trigger_search(message):
         r"\b(how to|tutorial|guide)\b.*"
     ]
     for pattern in patterns:
-        if re.match(pattern, message, re.IGNORECASE):
+        if re.search(pattern, message, re.IGNORECASE):
             return True
     return False
 
@@ -135,19 +146,8 @@ def is_duplicate_query(uid, query, time_window_minutes=10):
         if doc.to_dict().get("query") == normalized_query:
             return True
     return False
-    
 
-
-app = Flask(__name__)
-
-# --- Updated CORS setup ---
-CORS(
-    app,
-    origins=["https://felix-c7ba9.web.app"],  # frontend origin
-    supports_credentials=True,
-    methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization"]
-)
+client = Together(api_key=os.getenv("TOGETHER_API_KEY"))
 
 @app.route("/", methods=["GET", "OPTIONS"])
 def index():
@@ -155,12 +155,9 @@ def index():
         return '', 200
     return "Felix backend is alive!"
 
-client = Together(api_key=os.getenv("TOGETHER_API_KEY"))
-
 @app.route('/api/chat', methods=['POST', 'OPTIONS'])
 def chat():
     if request.method == 'OPTIONS':
-        # Properly respond to preflight requests
         return '', 200
 
     data = request.get_json()
@@ -170,24 +167,24 @@ def chat():
         return jsonify({"response": "Please enter a message."}), 400
 
     try:
-        uid = data.get("uid")  # Pass UID from frontend
+        uid = data.get("uid")
         recent_chats = get_recent_messages(uid)
 
         messages = []
-        # Felix identity system prompt
         felix_identity = {
             "role": "system",
             "content": (
                 "Your name is Felix. You are a helpful, emotionally intelligent AI assistant. "
                 "You must never mention you're an AI model or that you're running on any third-party service. "
                 "Introduce yourself as Felix if asked about your identity. Be friendly and professional."
+                "You are allowed to mention to say you are an open source LLM provided by together API services."
             )
         }
         messages.append(felix_identity)
 
         update_profile_from_message(uid, user_message)
         profile = get_user_profile(uid)
-        
+
         if profile:
             profile_intro = f"The user's name is {profile.get('name', 'unknown')} and their hobby is {profile.get('hobby', 'unknown')}."
             messages.insert(1, {"role": "system", "content": profile_intro})
@@ -206,8 +203,6 @@ def chat():
                 store_message(uid, "bot", f"[Search Info] {result_snippet}")
                 messages.append({"role": "system", "content": f"Use the following info to answer: {result_snippet}"})
 
-        user_emotion = detect_emotion(user_message)
-
         response = client.chat.completions.create(
             model="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
             messages=messages,
@@ -217,7 +212,6 @@ def chat():
         reply = response.choices[0].message.content
         store_message(uid, "user", user_message)
         toned_response = apply_tone(reply, user_message)
-    
         store_message(uid, "bot", reply)
 
         return jsonify({'response': toned_response})
