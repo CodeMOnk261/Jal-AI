@@ -1,30 +1,31 @@
 from flask import Flask, request, jsonify
-from transformers import pipeline
+from transformers import AutoTokenizer
+from onnxruntime import InferenceSession
+import numpy as np
 
 app = Flask(__name__)
 
-# Load model once at startup
-emotion_classifier = pipeline(
-    "text-classification",
-    model="bhadresh-savani/distilbert-base-uncased-emotion"
-)
+# Load ONNX model
+session = InferenceSession("onnx_emotion/model.onnx")
+tokenizer = AutoTokenizer.from_pretrained("onnx_emotion")
 
-@app.route('/detect-emotion', methods=['POST'])
-def detect_emotion():
-    data = request.get_json()
+def predict(text):
+    inputs = tokenizer(text, return_tensors="np", truncation=True, max_length=128)
+    outputs = session.run(None, dict(inputs))
+    logits = outputs[0]
+    scores = np.exp(logits) / np.exp(logits).sum(axis=1, keepdims=True)
+    label_ids = np.argmax(scores, axis=1)
+    label = tokenizer.model.config.id2label[label_ids[0]]
+    return label, float(scores[0, label_ids[0]])
+
+@app.route("/detect-emotion", methods=["POST"])
+def detect():
+    data = request.json or {}
     text = data.get("text", "")
-    
     if not text:
-        return jsonify({"error": "No text provided"}), 400
+        return jsonify(error="No text provided"), 400
+    label, score = predict(text)
+    return jsonify(emotion=label, score=score)
 
-    result = emotion_classifier(text)
-    top_emotion = max(result, key=lambda x: x["score"])
-    
-    return jsonify({
-        "emotion": top_emotion["label"],
-        "score": top_emotion["score"],
-        "all": result
-    })
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run()
