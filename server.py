@@ -17,7 +17,7 @@ load_dotenv()
 
 # Initialize Flask
 app = Flask(__name__)
-CORS(app, origins=["https://felix-c7ba9.web.app"], supports_credentials=True)
+CORS(app, origins=["https://felix-c7ba9.web.app", "http://localhost:5173"], supports_credentials=True)
 
 # Logging
 logging.basicConfig(level=logging.INFO)
@@ -36,9 +36,11 @@ client = Together(api_key=os.getenv("TOGETHER_API_KEY"))
 # === Utility functions ===
 
 def build_cors_response():
+    origin = request.headers.get("Origin")
+    allowed_origins = ["https://felix-c7ba9.web.app", "http://localhost:5173"]
     response = make_response()
-    response.headers["Access-Control-Allow-Origin"] = "https://felix-c7ba9.web.app"
-    response.headers["Access-Control-Allow-Origin"] = "http://localhost:5173/Main"
+    if origin in allowed_origins:
+        response.headers["Access-Control-Allow-Origin"] = origin
     response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     response.headers["Access-Control-Allow-Credentials"] = "true"
@@ -87,12 +89,18 @@ def trim_chat_to_fit(messages, max_tokens=8192, reserve=2048):
 
 # === Main Chat Endpoint ===
 
-@app.route("/", methods=["POST", "OPTIONS", "GET"])
+@app.route("/", methods=["POST", "OPTIONS"])
 def index_chat():
     if request.method == "OPTIONS":
         return build_cors_response()
 
-    data = request.get_json()
+    if request.content_type != 'application/json':
+        return jsonify({"error": "Content-Type must be application/json"}), 415
+
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "Invalid or missing JSON data."}), 400
+
     uid = data.get("uid", "").strip()
     user_message = data.get("message", "").strip()
 
@@ -135,7 +143,7 @@ def index_chat():
     # Token trimming
     messages = trim_chat_to_fit(messages)
 
-    # Call Together
+    # Call Together API
     try:
         response = client.chat.completions.create(
             model="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
@@ -149,6 +157,12 @@ def index_chat():
     except Exception as e:
         logger.exception("Together API error")
         return jsonify({"error": "AI model failed to respond."}), 500
+
+# === GET health check ===
+
+@app.route("/", methods=["GET"])
+def root():
+    return jsonify({"status": "Felix backend is running."})
 
 # === Error Handling ===
 
