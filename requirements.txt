@@ -7,3 +7,4 @@ google-search-results
 python-dotenv
 requests
 tenacity
+transformers
