@@ -76,13 +76,18 @@ def cached_recent_query(uid, query):
     normalized_query = query.lower().strip()
     return any(doc.to_dict().get("query") == normalized_query for doc in docs)
 
+def count_tokens_approx(text):
+    # Simple token estimation for LLaMA models (approx. 4 chars = 1 token)
+    return int(len(text) / 4)
+
 def trim_chat_to_fit(messages, max_tokens=8192, reserve=2048):
-    """Trims oldest messages to keep input tokens within limit"""
-    from transformers import AutoTokenizer
-    tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-3-8b-chat-hf")
-    while tokenizer.encode(json.dumps(messages)) and len(tokenizer.encode(json.dumps(messages))) + reserve > max_tokens:
+    """Trims oldest messages to keep input tokens within limit using approx token count"""
+    while True:
+        total = sum(count_tokens_approx(json.dumps(m["content"])) for m in messages)
+        if total + reserve <= max_tokens:
+            break
         if len(messages) > 1:
-            messages.pop(1)  # avoid popping system prompt
+            messages.pop(1)  # preserve system prompt
         else:
             break
     return messages
