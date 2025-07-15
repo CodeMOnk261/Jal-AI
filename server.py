@@ -38,6 +38,7 @@ client = Together(api_key=os.getenv("TOGETHER_API_KEY"))
 def build_cors_response():
     response = make_response()
     response.headers["Access-Control-Allow-Origin"] = "https://felix-c7ba9.web.app"
+    response.headers["Access-Control-Allow-Origin"] = "http://localhost:5173/Main"
     response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     response.headers["Access-Control-Allow-Credentials"] = "true"
@@ -86,7 +87,7 @@ def trim_chat_to_fit(messages, max_tokens=8192, reserve=2048):
 
 # === Main Chat Endpoint ===
 
-@app.route("/", methods=["POST", "OPTIONS"])
+@app.route("/", methods=["POST", "OPTIONS", "GET"])
 def index_chat():
     if request.method == "OPTIONS":
         return build_cors_response()
