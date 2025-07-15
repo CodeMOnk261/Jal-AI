@@ -5,6 +5,5 @@ firebase_admin
 serpapi
 google-search-results
 python-dotenv
-pyht
 requests
 tenacity
