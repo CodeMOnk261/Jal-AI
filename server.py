@@ -6,7 +6,7 @@ from flask import Flask, request, jsonify, make_response
 from flask_cors import CORS
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
-from together import Together
+from groq import Groq
 import firebase_admin
 from firebase_admin import firestore, credentials
 from serpapi import GoogleSearch
@@ -30,8 +30,8 @@ if not firebase_admin._apps:
     firebase_admin.initialize_app(cred)
 db = firestore.client()
 
-# Together client
-client = Together(api_key=os.getenv("TOGETHER_API_KEY"))
+# Groq client
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 # === Utility functions ===
 
@@ -148,19 +148,32 @@ def index_chat():
     # Token trimming
     messages = trim_chat_to_fit(messages)
 
-    # Call Together API
+    # Call Groq API with streaming (buffered)
     try:
-        response = client.chat.completions.create(
-            model="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
+        completion = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
             messages=messages,
-            stream=False
+            temperature=1,
+            max_completion_tokens=1024,
+            top_p=1,
+            stream=True,
+            stop=None,
         )
-        reply = response.choices[0].message.content.strip()
+
+        reply_parts = []
+        for chunk in completion:
+            content = chunk.choices[0].delta.content
+            if content:
+                reply_parts.append(content)
+
+        reply = "".join(reply_parts).strip()
+
         store_message(uid, "user", user_message)
         store_message(uid, "bot", reply)
+
         return jsonify({"response": reply})
     except Exception as e:
-        logger.exception("Together API error")
+        logger.exception("Groq API error")
         return jsonify({"error": "AI model failed to respond."}), 500
 
 # === GET health check ===
