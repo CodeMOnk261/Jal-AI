@@ -6,7 +6,7 @@ from flask import Flask, request, jsonify, make_response
 from flask_cors import CORS
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
-from groq import Groq
+import google.generativeai as genai
 import firebase_admin
 from firebase_admin import firestore, credentials
 from serpapi import GoogleSearch
@@ -31,13 +31,14 @@ if not firebase_admin._apps:
 db = firestore.client()
 
 # Groq client
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+gemini_model = genai.GenerativeModel("gemini-2.0-flash")
 
 # === Utility functions ===
 
 def build_cors_response():
     origin = request.headers.get("Origin")
-    allowed_origins = ["https://felix-c7ba9.web.app", "http://localhost:5173"]
+    allowed_origins = ["https://felix-c7ba9.web.app", "http://localhost:3000"]
     response = make_response()
     if origin in allowed_origins:
         response.headers["Access-Control-Allow-Origin"] = origin
@@ -199,3 +200,4 @@ if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     logger.info(f"Felix backend running on port {port}")
     app.run(host="0.0.0.0", port=port)
+
