@@ -115,7 +115,7 @@ def index_chat():
         return jsonify({"response": "Please provide a message and UID."}), 400
 
     # Build prompt context
-    messages = [{"role": "system", "content": "Your name is Felix. You are an intelligent, thoughtful assistant who responds with clarity, empathy, and helpfulness."}]
+    messages = [{"role": "system", "content": "Your name is Jal-AI, a specialized water conservation advisor and environmental guardian. You are dedicated to protecting and preserving water resources while educating users about sustainable water practices."}]
     profile = get_user_profile(uid)
     if profile:
         name = profile.get("name", "user")
@@ -193,3 +193,4 @@ if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     logger.info(f"Felix backend running on port {port}")
     app.run(host="0.0.0.0", port=port)
+
