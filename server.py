@@ -30,7 +30,7 @@ if not firebase_admin._apps:
     firebase_admin.initialize_app(cred)
 db = firestore.client()
 
-# Groq client
+# Gemini client
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 gemini_model = genai.GenerativeModel("gemini-2.0-flash")
 
@@ -61,7 +61,10 @@ def get_user_profile(uid):
     return doc.to_dict() if doc.exists else {}
 
 def should_trigger_search(message):
-    patterns = [r"\b(what|who|where|how|define|tell me about|explain)\b", r"\b(news|latest|today|current)\b"]
+    patterns = [
+        r"\b(what|who|where|how|define|tell me about|explain)\b",
+        r"\b(news|latest|today|current)\b"
+    ]
     return any(re.search(pattern, message, re.IGNORECASE) for pattern in patterns)
 
 def store_recent_query(uid, query):
@@ -78,17 +81,15 @@ def cached_recent_query(uid, query):
     return any(doc.to_dict().get("query") == normalized_query for doc in docs)
 
 def count_tokens_approx(text):
-    # Simple token estimation for LLaMA models (approx. 4 chars = 1 token)
-    return int(len(text) / 4)
+    return int(len(text) / 4)  # ~4 chars per token
 
 def trim_chat_to_fit(messages, max_tokens=8192, reserve=2048):
-    """Trims oldest messages to keep input tokens within limit using approx token count"""
     while True:
         total = sum(count_tokens_approx(json.dumps(m["content"])) for m in messages)
         if total + reserve <= max_tokens:
             break
         if len(messages) > 1:
-            messages.pop(1)  # preserve system prompt
+            messages.pop(1)
         else:
             break
     return messages
@@ -113,7 +114,7 @@ def index_chat():
     if not uid or not user_message:
         return jsonify({"response": "Please provide a message and UID."}), 400
 
-    # Build prompt
+    # Build prompt context
     messages = [{"role": "system", "content": "Your name is Felix. You are an intelligent, thoughtful assistant who responds with clarity, empathy, and helpfulness."}]
     profile = get_user_profile(uid)
     if profile:
@@ -128,7 +129,7 @@ def index_chat():
 
     messages.append({"role": "user", "content": user_message})
 
-    # DuckDuckGo search if needed
+    # Optional: search injection
     if should_trigger_search(user_message) and not cached_recent_query(uid, user_message):
         try:
             params = {
@@ -139,40 +140,34 @@ def index_chat():
             }
             results = GoogleSearch(params).get_dict()
             if "organic_results" in results:
-                snippet = "\n".join(f"{r['title']} — {r['snippet']}" for r in results["organic_results"][:3] if r.get("snippet"))
+                snippet = "\n".join(
+                    f"{r['title']} — {r['snippet']}"
+                    for r in results["organic_results"][:3]
+                    if r.get("snippet")
+                )
                 messages.append({"role": "system", "content": f"Use this info to answer: {snippet}"})
                 store_recent_query(uid, user_message)
                 store_message(uid, "bot", f"[Search Info] {snippet}")
         except Exception as e:
             logger.warning(f"Search error: {e}")
 
-    # Token trimming
     messages = trim_chat_to_fit(messages)
 
-    # Call Groq API with streaming (buffered)
+    # === Gemini API call ===
     try:
-        completion = client.chat.completions.create(
-            model="gemini-2.0-flash",
-            messages=messages,
-            temperature=1,
-            max_completion_tokens=1024,
-            top_p=1,
-            stream=True,
-            stop=None,
+        # Gemini expects a single text string, so we join messages
+        prompt_text = "\n".join(
+            f"{m['role'].capitalize()}: {m['content']}" for m in messages
         )
 
-        reply_parts = []
-        for chunk in completion:
-            content = chunk.choices[0].delta.content
-            if content:
-                reply_parts.append(content)
-
-        reply = "".join(reply_parts).strip()
+        gemini_response = gemini_model.generate_content(prompt_text)
+        reply = gemini_response.text.strip()
 
         store_message(uid, "user", user_message)
         store_message(uid, "bot", reply)
 
         return jsonify({"response": reply})
+
     except Exception as e:
         logger.exception("GEMINI API error")
         return jsonify({"error": "AI model failed to respond."}), 500
@@ -194,13 +189,7 @@ def handle_exception(e):
     logger.exception("Unhandled server error")
     return jsonify({"error": "Internal server error."}), 500
 
-# === Entry Point ===
-
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     logger.info(f"Felix backend running on port {port}")
     app.run(host="0.0.0.0", port=port)
-
-
-
-
