@@ -17,7 +17,7 @@ load_dotenv()
 
 # Initialize Flask
 app = Flask(__name__)
-CORS(app, origins=["https://felix-c7ba9.web.app", "http://localhost:5173"], supports_credentials=True)
+CORS(app, origins=["https://felix-c7ba9.web.app", "http://localhost:3000"], supports_credentials=True)
 
 # Logging
 logging.basicConfig(level=logging.INFO)
@@ -200,6 +200,7 @@ if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     logger.info(f"Felix backend running on port {port}")
     app.run(host="0.0.0.0", port=port)
+
 
 
 
