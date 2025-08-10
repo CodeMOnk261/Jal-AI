@@ -38,7 +38,7 @@ gemini_model = genai.GenerativeModel("gemini-2.0-flash")
 
 def build_cors_response():
     origin = request.headers.get("Origin")
-    allowed_origins = ["https://felix-c7ba9.web.app", "http://localhost:3000"]
+    allowed_origins = ["https://felix-c7ba9.web.app", "http://localhost:3000/chat"]
     response = make_response()
     if origin in allowed_origins:
         response.headers["Access-Control-Allow-Origin"] = origin
@@ -200,5 +200,6 @@ if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     logger.info(f"Felix backend running on port {port}")
     app.run(host="0.0.0.0", port=port)
+
 
 
