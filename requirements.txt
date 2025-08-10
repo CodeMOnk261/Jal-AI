@@ -1,6 +1,6 @@
 flask
 flask_cors
-groq
+google-generativeai
 firebase_admin
 serpapi
 google-search-results
