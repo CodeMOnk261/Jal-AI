@@ -152,7 +152,7 @@ def index_chat():
     # Call Groq API with streaming (buffered)
     try:
         completion = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="gemini-2.0-flash",
             messages=messages,
             temperature=1,
             max_completion_tokens=1024,
@@ -174,7 +174,7 @@ def index_chat():
 
         return jsonify({"response": reply})
     except Exception as e:
-        logger.exception("Groq API error")
+        logger.exception("GEMINI API error")
         return jsonify({"error": "AI model failed to respond."}), 500
 
 # === GET health check ===
@@ -200,4 +200,5 @@ if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     logger.info(f"Felix backend running on port {port}")
     app.run(host="0.0.0.0", port=port)
+
 
